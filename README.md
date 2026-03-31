@@ -1,2 +1,1 @@
-# python
-Python Automation Project
+Juniper Synchronize
