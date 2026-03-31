@@ -2,7 +2,7 @@ import paramiko
 import time
 import subprocess
 
-# Konfigurasi perangkat Juniper
+# Juniper device configuration
 MASTER = {
     "host": "192.168.100.21",
     "username": "user",
@@ -14,7 +14,7 @@ BACKUP = {
     "password": "password123"
 }
 
-# Konfigurasi yang wajib ada
+# Mandatory configuration
 MANDATORY_CONFIG = """
 system {
     host-name RO-BACKUP;
@@ -63,7 +63,7 @@ routing-options {
 """
 
 def ssh_command(device, command):
-    """Eksekusi perintah SSH dan kembalikan output."""
+    """Execute an SSH command and return the output."""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
@@ -73,11 +73,11 @@ def ssh_command(device, command):
         client.close()
         return output
     except Exception as e:
-        print(f"❌ ERROR: Gagal terhubung ke {device['host']}: {e}")
+        print(f"❌ ERROR: Failed to connect to {device['host']}: {e}")
         return None
 
 def filter_config(config):
-    """Hapus hostname dan interface ge-0/0/0 dari konfigurasi Master."""
+    """Remove hostname and interface ge-0/0/0 from the Master configuration."""
     new_config = []
     skip_block = False
     brace_count = 0
@@ -100,44 +100,44 @@ def filter_config(config):
     return "\n".join(new_config)
 
 def validate_config(config):
-    """Validasi format konfigurasi sebelum dikirim ke perangkat."""
+    """Validate the configuration format before sending it to the device."""
     open_braces = config.count("{")
     close_braces = config.count("}")
     
     if open_braces != close_braces:
-        print(f"❌ ERROR: Konfigurasi tidak ditutup dengan benar! {open_braces} '{'{'}' vs {close_braces} '{'}'}'")
+        print(f"❌ ERROR: Configuration braces are not properly closed! {open_braces} '{'{'}' vs {close_braces} '{'}'}'")
         return False
     
     return True
 
 def sync_config():
-    """Sinkronisasi konfigurasi Master ke Backup menggunakan `load override`."""
-    print("📥 Mengambil konfigurasi dari Master...")
+    """Synchronize configuration from Master to Backup using `load override`."""
+    print("📥 Fetching configuration from Master...")
     master_config = ssh_command(MASTER, "show configuration | no-more")
 
     if not master_config:
-        print("❌ Gagal mengambil konfigurasi dari Master.")
+        print("❌ Failed to fetch configuration from Master.")
         return
 
-    # Filter interface ge-0/0/0 dan hostname
+    # Filter out interface ge-0/0/0 and hostname
     filtered_config = filter_config(master_config)
 
-    # Gabungkan dengan konfigurasi wajib
+    # Merge with mandatory configuration
     final_config = MANDATORY_CONFIG + "\n" + filtered_config
 
-    # Validasi sebelum mengirim ke perangkat backup
+    # Validate before sending to the backup device
     if not validate_config(final_config):
-        print("❌ Sinkronisasi dibatalkan karena format konfigurasi salah.")
+        print("❌ Synchronization aborted due to incorrect configuration format.")
         return
 
-    # Simpan konfigurasi ke file sementara
+    # Save configuration to a temporary file
     config_file = "final_config.txt"
     with open(config_file, "w") as file:
         file.write(final_config)
 
-    print("✅ Konfigurasi berhasil divalidasi, mengirim ke perangkat backup...")
+    print("✅ Configuration validated successfully, sending to backup device...")
 
-    # Kirim file ke perangkat Backup via SCP
+    # Send file to Backup device via SCP
     try:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -147,15 +147,15 @@ def sync_config():
         sftp.put(config_file, "/var/tmp/final_config.txt")
         sftp.close()
 
-        print("📤 File konfigurasi berhasil dikirim ke perangkat Backup.")
+        print("📤 Configuration file successfully sent to Backup device.")
 
-        # Verifikasi isi file di Backup sebelum load override
-        print("🔍 Verifikasi isi file di perangkat Backup...")
+        # Verify file contents on Backup before load override
+        print("🔍 Verifying file contents on Backup device...")
         remote_file_content = ssh_command(BACKUP, "cat /var/tmp/final_config.txt")
-        print(f"📄 Isi file:\n{remote_file_content}")
+        print(f"📄 File contents:\n{remote_file_content}")
 
-        # Terapkan konfigurasi dengan load override dalam sesi interaktif
-        print("🛠 Menerapkan konfigurasi dengan `load override`...")
+        # Apply configuration with load override in an interactive session
+        print("🛠 Applying configuration with `load override`...")
         ssh_interactive(BACKUP, [
             "configure",
             "load override /var/tmp/final_config.txt",
@@ -165,15 +165,15 @@ def sync_config():
             "exit"
         ])
 
-        print("✅ Sinkronisasi berhasil dilakukan!")
-        # Eksekusi script notifikasi jika sinkronisasi berhasil
+        print("✅ Synchronization completed successfully!")
+        # Execute notification script if synchronization is successful
         subprocess.run(["python3", "notif.py"], check=True)
         client.close()
     except Exception as e:
-        print(f"❌ ERROR: Gagal mengirim konfigurasi ke Backup: {e}")
+        print(f"❌ ERROR: Failed to send configuration to Backup: {e}")
 
 def ssh_interactive(device, commands):
-    """Eksekusi sesi SSH interaktif untuk Juniper."""
+    """Execute an interactive SSH session for Juniper."""
     try:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -190,7 +190,7 @@ def ssh_interactive(device, commands):
         channel.close()
         client.close()
     except Exception as e:
-        print(f"❌ ERROR: Gagal menjalankan sesi interaktif: {e}")
+        print(f"❌ ERROR: Failed to run interactive session: {e}")
 
 if __name__ == "__main__":
     sync_config()
