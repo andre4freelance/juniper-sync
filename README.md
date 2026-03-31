@@ -140,4 +140,4 @@ These are then replaced by the `MANDATORY_CONFIG` block defined in the script.
 
 ## License
 
-This project is for internal/testing use. No license has been assigned yet.
+This project is licensed under the [MIT License](LICENSE).
